@@ -62,15 +62,26 @@ export function coverGradient(title: string): string {
   return `linear-gradient(150deg, hsl(${h1} ${s1}% 34%), hsl(${h2} ${s2}% 27%))`
 }
 
-/** 书名在书脊上竖排显示，最多 10 个字（再多会被 max-height 裁掉且显得杂乱）。 */
+/**
+ * 书名在书脊上竖排显示。
+ *
+ * 截断长度必须按字符种类区分：中文一字一格，10 个字正好一列；
+ * 而 10 个拉丁字母竖起来会拉成很长一条，既超出封面也不像书脊。
+ * 英文按单词边界截到约 18 个字符。
+ */
 function spineText(title: string): string {
   const trimmed = title.trim()
   if (trimmed.length === 0) return '未命名'
-  return trimmed.length <= 10 ? trimmed : `${trimmed.slice(0, 10)}…`
+
+  const isCjk = /[\u3400-\u9fff\uf900-\ufaff]/.test(trimmed)
+  const limit = isCjk ? 10 : 18
+  return trimmed.length <= limit ? trimmed : `${trimmed.slice(0, limit)}…`
 }
 
 export function BookCover({ book, percent = 0, finished = false, unread = false, width = 104 }: BookCoverProps) {
   const safePercent = Math.min(1, Math.max(0, percent))
+  // 拉丁字母竖排时应旋转 90°（mixed），强行直立（upright）会变得很难读
+  const isCjkTitle = /[\u3400-\u9fff\uf900-\ufaff]/.test(book.title)
 
   return (
     <div
@@ -94,7 +105,7 @@ export function BookCover({ book, percent = 0, finished = false, unread = false,
         />
       )}
 
-      <span className="cover__text">{spineText(book.title)}</span>
+      <span className={isCjkTitle ? 'cover__text' : 'cover__text cover__text--latin'}>{spineText(book.title)}</span>
 
       <span className="cover__badge">{FORMAT_LABEL[book.format] ?? book.format.toUpperCase()}</span>
 

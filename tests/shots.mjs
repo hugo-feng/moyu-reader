@@ -52,34 +52,59 @@ async function shot(name) {
   console.log(`  已保存 ${file.replace(resolve(here, '..'), '.')}`)
 }
 
+/** 用真实鼠标点击（Puppeteer 的 click 会滚动到可视区并派发完整事件序列）。
+ *  不要用 element.click() 之类的 DOM 合成事件：它对外层 div 无效，
+ *  因为真正可点的是内部的 button，合成事件不会冒泡到正确的目标。 */
+async function clickReal(selector) {
+  try {
+    await page.waitForSelector(selector, { timeout: 6000 })
+    await page.click(selector)
+    return true
+  } catch {
+    console.warn(`  [警告] 无法点击 ${selector}`)
+    return false
+  }
+}
+
 async function clickAria(label) {
-  const ok = await page.evaluate((l) => {
+  const sel = await page.evaluate((l) => {
     const hit = [...document.querySelectorAll('button,[role="button"]')].find(
       (el) => (el.getAttribute('aria-label') ?? '').includes(l),
     )
-    if (hit) {
-      hit.click()
-      return true
-    }
-    return false
+    if (!hit) return null
+    // 给元素打一个临时标记，好让 Puppeteer 用真实鼠标点它
+    hit.setAttribute('data-shot-target', l)
+    return `[data-shot-target="${l}"]`
   }, label)
-  if (!ok) console.warn(`  [警告] 找不到 aria-label 含「${label}」的元素`)
-  return ok
+  if (!sel) {
+    console.warn(`  [警告] 找不到 aria-label 含「${label}」的元素`)
+    return false
+  }
+  await page.click(sel)
+  await page.evaluate((l) => {
+    document.querySelector(`[data-shot-target="${l}"]`)?.removeAttribute('data-shot-target')
+  }, label)
+  return true
 }
 
 async function clickText(text) {
-  const ok = await page.evaluate((t) => {
+  const sel = await page.evaluate((t) => {
     const hit = [...document.querySelectorAll('button,[role="button"]')].find((el) =>
       (el.textContent ?? '').includes(t),
     )
-    if (hit) {
-      hit.click()
-      return true
-    }
-    return false
+    if (!hit) return null
+    hit.setAttribute('data-shot-target', `text-${t}`)
+    return `[data-shot-target="text-${t}"]`
   }, text)
-  if (!ok) console.warn(`  [警告] 找不到文本含「${text}」的元素`)
-  return ok
+  if (!sel) {
+    console.warn(`  [警告] 找不到文本含「${text}」的元素`)
+    return false
+  }
+  await page.click(sel)
+  await page.evaluate((t) => {
+    document.querySelector(`[data-shot-target="text-${t}"]`)?.removeAttribute('data-shot-target')
+  }, text)
+  return true
 }
 
 /** 等待某个选择器出现，避免脚本在渲染完成前就点下去。 */
@@ -110,10 +135,8 @@ if ((await page.$('.empty')) !== null) {
 await shot('书架')
 
 // 2. 书内：打开示例书
-await page.evaluate(() => {
-  const card = document.querySelector('.book-card')
-  if (card) card.click()
-})
+// 书架卡片里真正可点的是带 aria-label 的 button，不是外层 div。
+await clickAria('打开《')
 await waitFor('.reader__text')
 await wait(1400)
 await shot('阅读页-章首页')

@@ -193,6 +193,31 @@ async function main() {
   step('书架出现书籍卡片', bookCount > 0, `book-card=${bookCount}`)
   step('封面组件渲染', coverCount > 0, `cover=${coverCount}`)
 
+  // 书脊书名必须是**一列**竖排文字。
+  // 这条断言来自一次真实的误判：封面文字排成几列时，人眼在小尺寸截图里
+  // 很容易看错（当时把正常的一列竖排误读成了「逐字堆叠」）。与其每次都靠眼睛判断，
+  // 不如把「必须是一个细高的连续块」写成断言 —— 一旦竖排退化成多列，这里会立刻红。
+  const spine = await page.evaluate(() => {
+    const el = document.querySelector('.cover__text')
+    if (!el) return null
+    const rects = [...el.getClientRects()]
+    const box = el.getBoundingClientRect()
+    return {
+      text: el.textContent ?? '',
+      rectCount: rects.length,
+      width: Math.round(box.width),
+      height: Math.round(box.height),
+      writingMode: getComputedStyle(el).writingMode,
+    }
+  })
+  step(
+    '书脊书名为单列竖排',
+    !!spine && spine.writingMode === 'vertical-rl' && spine.height > spine.width,
+    spine
+      ? `"${spine.text}" ${spine.width}×${spine.height} writing-mode=${spine.writingMode}`
+      : '读不到封面文字',
+  )
+
   // 验证示例书被正确分章（这是分章算法的端到端证据）
   const chapInfo = await page.evaluate(() => {
     return new Promise((resolve) => {

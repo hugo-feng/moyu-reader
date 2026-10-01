@@ -475,6 +475,12 @@ textarea:focus {
   pointer-events: none;
 }
 
+/* 书名用竖排：中文书的书脊就是从右往左竖着印书名的。
+   这里有两个必须同时成立的条件，缺一个就会退化成「逐字堆叠」的乱码观感：
+     1. align-self: flex-end —— 竖排文字的块级起点在**右上角**，
+        不贴到右边，书写方向就反了，字会从封面正中间开始堆。
+     2. max-height 给足 —— 竖排里 max-height 限制的是**每列能放几个字**。
+        给得太小，四个字会被折成四列，像四个独立的字块而不是一行书名。 */
 .cover__text {
   position: relative;
   z-index: 3;
@@ -483,11 +489,20 @@ textarea:focus {
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
   writing-mode: vertical-rl;
   text-orientation: upright;
-  letter-spacing: 0.16em;
-  font-size: 13px;
+  letter-spacing: 0.12em;
+  font-size: 12.5px;
   font-weight: 600;
-  max-height: 68%;
+  align-self: flex-end;
+  max-height: 76%;
   overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 拉丁字母竖排：旋转 90° 而不是逐字直立。
+   upright 只适合方块字；把「The Old Man」逐字立起来是读不出来的。 */
+.cover__text--latin {
+  text-orientation: mixed;
+  letter-spacing: 0.06em;
 }
 
 .cover__badge {
