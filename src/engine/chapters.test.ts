@@ -73,6 +73,35 @@ describe('splitChapters — 高置信章节标题', () => {
     expect(titles.some((t) => t.includes('番外'))).toBe(true)
     expect(chapters.length).toBeGreaterThanOrEqual(3)
   })
+
+  it('篇名与标题之间的空白被正确保留为一个空格', () => {
+    const chapters = splitChapters(normalizeText(['楔子 雪夜', '正文。'].join('\n')))
+    expect(chapters[0].title).toBe('楔子 雪夜')
+    expect(chapters[0].detected).toBe(true)
+  })
+})
+
+describe('splitChapters — 特殊篇名不得误切普通句子（回归）', () => {
+  /**
+   * 这曾经是一个真实 bug：RE_SPECIAL 原先允许「篇名 + 最多 30 字的尾巴」，
+   * 于是任何以「前言/序言/楔子/番外」开头的短句都会被当成章节标题，
+   * 而且标题会被拼成「整句 + 重复尾巴」的畸形形式。
+   * 中文小说里「前言里说过…」这类句子很常见，属于会真实切错章的缺陷。
+   */
+  it.each(['前言部分内容。', '序言里说过这件事。', '楔子其实还没写完。', '番外小故事一则。'])(
+    '以篇名开头的普通句子「%s」不被当成标题',
+    (line) => {
+      const doc = normalizeText([line, '正文继续。'].join('\n'))
+      const chapters = splitChapters(doc)
+
+      // 没有被切成多个章节，也没有任何一章被标记为「识别出的标题」
+      expect(chapters.every((c) => !c.detected)).toBe(true)
+      // 整句完好地留在正文里，一个字都没丢
+      expect(chapters[0].content.startsWith(line)).toBe(true)
+      // 分章必须无损：拼回所有 content 等于原文
+      expect(chapters.map((c) => c.content).join('')).toBe(doc)
+    },
+  )
 })
 
 describe('splitChapters — 抗误切（这是最关键的行为）', () => {

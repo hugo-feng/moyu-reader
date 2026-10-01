@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 书架首页。
  *
  * 结构参照主流中文阅读 App（顶部问候 + 继续阅读 + 工具栏 + 网格/列表），
@@ -80,12 +80,15 @@ const GROUP_COLORS = ['#8a6a46', '#4e7a4a', '#7c5c8a', '#3f6f8a', '#a5453a'] as 
 const LONG_PRESS_MS = 500
 const LONG_PRESS_MOVE_TOLERANCE = 10
 
-function greetingByHour(hour: number): string {
-  if (hour < 5) return '凌晨好'
-  if (hour < 11) return '早上好'
-  if (hour < 13) return '中午好'
-  if (hour < 18) return '下午好'
-  return '晚上好'
+/** 今天（本地日 00:00 起）的阅读秒数。 */
+function todaySeconds(sessions: Array<{ startedAt: number; durationSec: number }>): number {
+  const now = new Date()
+  const since = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  let total = 0
+  for (const s of sessions) {
+    if (s.startedAt >= since && s.startedAt <= Date.now()) total += Math.max(0, s.durationSec)
+  }
+  return total
 }
 
 /** 本周（近 7 天，按本地日 00:00 为界）的阅读秒数。 */
@@ -112,6 +115,8 @@ export function BookshelfScreen(props: BookshelfScreenProps) {
 
   const [progressMap, setProgressMap] = useState<Map<string, number>>(new Map())
   const [weekSec, setWeekSec] = useState(0)
+  const [todaySec, setTodaySec] = useState(0)
+  const [statsLoaded, setStatsLoaded] = useState(false)
   const [busy, setBusy] = useState(false)
 
   const [sheetBook, setSheetBook] = useState<Book | null>(null)
@@ -123,7 +128,21 @@ export function BookshelfScreen(props: BookshelfScreenProps) {
   const pressTimer = useRef<number | null>(null)
   const pressOrigin = useRef<{ x: number; y: number } | null>(null)
 
-  const greeting = useMemo(() => greetingByHour(new Date().getHours()), [])
+  /**
+   * 顶部那行小字。
+   *
+   * 这里原本是「早上好 / 下午好」这类按时段变化的问候。
+   * 换掉的理由：问候是通用应用的套话，它说的是「时间」，而书架上最该被说的是「读」。
+   * 现在它显示真实读数：今天读了多少；今天还没读但本周读过，就报本周；
+   * 一周都没读，就直说「本周尚未开卷」。
+   */
+  const shelfStatus = useMemo(() => {
+    if (!statsLoaded && books.length > 0) return '正在整理书架…'
+    if (todaySec > 0) return `今天已读 ${formatSeconds(todaySec)}`
+    if (weekSec > 0) return `本周已读 ${formatSeconds(weekSec)}`
+    return '本周尚未开卷'
+  }, [statsLoaded, books.length, todaySec, weekSec])
+
   const finishedCount = useMemo(() => items.filter((i) => i.finished).length, [items])
 
   /** 各书的阅读进度：继续阅读卡片与「按进度排序」都需要。 */
@@ -146,15 +165,21 @@ export function BookshelfScreen(props: BookshelfScreenProps) {
     }
   }, [books])
 
-  /** 本周阅读时长。 */
+  /** 本周与今日阅读时长（同一个查询里一起算，避免读两遍会话表）。 */
   useEffect(() => {
     let cancelled = false
     void (async () => {
       try {
         const sessions = await dbGetSessions()
-        if (!cancelled) setWeekSec(weekSeconds(sessions))
+        if (cancelled) return
+        setWeekSec(weekSeconds(sessions))
+        setTodaySec(todaySeconds(sessions))
       } catch {
-        if (!cancelled) setWeekSec(0)
+        if (cancelled) return
+        setWeekSec(0)
+        setTodaySec(0)
+      } finally {
+        if (!cancelled) setStatsLoaded(true)
       }
     })()
     return () => {
@@ -303,7 +328,7 @@ export function BookshelfScreen(props: BookshelfScreenProps) {
           <header className="shelf__hero">
             <div className="row row--between" style={{ alignItems: 'flex-start' }}>
               <div className="grow">
-                <div className="shelf__eyebrow">{greeting}</div>
+                <div className="shelf__status">{shelfStatus}</div>
                 <h1 className="shelf__headline">我的书架</h1>
               </div>
               <button type="button" className="btn btn--ghost" aria-label="阅读统计" onClick={onOpenStats}>
