@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- 墨阅图标：纸感底色 + 翻开的书 + 一滴墨 -->
+  <rect width="64" height="64" rx="14" fill="#F7F3EA"/>
+  <rect x="0.75" y="0.75" width="62.5" height="62.5" rx="13.25" fill="none" stroke="#E7E0D3" stroke-width="1.5"/>
+
+  <!-- 书脊与两页 -->
+  <path d="M32 18v30" stroke="#8A6A46" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M32 20c-4.5-3.2-10-4.4-15.5-4.6v27.2C22 42.8 27.5 44 32 47.2z"
+        fill="#EFE6D6" stroke="#8A6A46" stroke-width="2.4" stroke-linejoin="round"/>
+  <path d="M32 20c4.5-3.2 10-4.4 15.5-4.6v27.2C43.5 42.8 38 44 32 47.2z"
+        fill="#EFE6D6" stroke="#8A6A46" stroke-width="2.4" stroke-linejoin="round"/>
+
+  <!-- 墨滴：点题「墨」 -->
+  <circle cx="32" cy="40.5" r="3.1" fill="#33302B"/>
+</svg>
