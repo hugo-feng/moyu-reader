@@ -13,10 +13,10 @@
  *   - 备注编辑是行内 textarea，保存时同步写回 store（书内模式下两处是同一份数据）。
  */
 
-import s useEffect, useMemo, useState } from 'react'
-import type s Bookmark, Highlight } from '../engine/types'
+import { useEffect, useMemo, useState } from 'react'
+import type { Bookmark, Highlight } from '../engine/types'
 import * as db from '../storage'
-import s
+import {
   formatRelativeTime,
   removeBookmark,
   removeHighlight,
@@ -24,9 +24,9 @@ import s
   updateHighlightNote,
   useAppState,
 } from '../store'
-import s IconArrowRight, IconBack, IconNotes, IconTrash } from './icons'
+import { IconArrowRight, IconBack, IconNotes, IconTrash } from './icons'
 
-interface NotesScreenProps s
+interface NotesScreenProps {
   onBack: () => void
   /** 书内笔记模式：只显示这本书，且顶部不显示筛选 */
   bookId?: string
@@ -39,7 +39,7 @@ interface NotesScreenProps s
 type NoteKind = 'bookmark' | 'highlight'
 type TabId = 'all' | 'bookmark' | 'highlight'
 
-interface NoteRow s
+interface NoteRow {
   kind: NoteKind
   id: string
   bookId: string
@@ -51,26 +51,26 @@ interface NoteRow s
   color?: string
 }
 
-interface EditState s
+interface EditState {
   kind: NoteKind
   id: string
   value: string
 }
 
-const TABS: Array<s id: TabId; label: string }> = [
-  s id: 'all', label: '全部' },
-  s id: 'bookmark', label: '书签' },
-  s id: 'highlight', label: '划线' },
+const TABS: Array<{ id: TabId; label: string }> = [
+  { id: 'all', label: '全部' },
+  { id: 'bookmark', label: '书签' },
+  { id: 'highlight', label: '划线' },
 ]
 
 /** 本地时区的 YYYY-MM-DD（与统计页口径一致，避免 UTC 跨日串组）。 */
-function localDayKey(timestamp: number): string s
+function localDayKey(timestamp: number): string {
   const d = new Date(timestamp)
-  return `$sd.getFullYear()}-$s`$sd.getMonth() + 1}`.padStart(2, '0')}-$s`$sd.getDate()}`.padStart(2, '0')}`
+  return `${d.getFullYear()}-${`${d.getMonth() + 1}`.padStart(2, '0')}-${`${d.getDate()}`.padStart(2, '0')}`
 }
 
 /** 分组标题：今天 / 昨天 / N 天前 / 6月1日。 */
-function formatSectionDay(dayKey: string): string s
+function formatSectionDay(dayKey: string): string {
   const [y, m, d] = dayKey.split('-').map(Number)
   const date = new Date(y ?? 1970, (m ?? 1) - 1, d ?? 1)
   const today = new Date()
@@ -78,12 +78,12 @@ function formatSectionDay(dayKey: string): string s
   const diffDays = Math.round((startOfToday - date.getTime()) / 86400000)
   if (diffDays <= 0) return '今天'
   if (diffDays === 1) return '昨天'
-  if (diffDays < 7) return `$sdiffDays} 天前`
-  return `$sm} 月 $sd} 日`
+  if (diffDays < 7) return `${diffDays} 天前`
+  return `${m} 月 ${d} 日`
 }
 
-export function NotesScreen(s onBack, bookId, onJump, onShowAll }: NotesScreenProps) s
-  const s books } = useAppState()
+export function NotesScreen({ onBack, bookId, onJump, onShowAll }: NotesScreenProps) {
+  const { books } = useAppState()
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([])
   const [highlights, setHighlights] = useState<Highlight[]>([])
   const [loaded, setLoaded] = useState(false)
@@ -91,40 +91,40 @@ export function NotesScreen(s onBack, bookId, onJump, onShowAll }: NotesScreenPr
   const [editing, setEditing] = useState<EditState | null>(null)
   const [confirmId, setConfirmId] = useState<string | null>(null)
 
-  useEffect(() => s
+  useEffect(() => {
     let cancelled = false
-    void (async () => s
-      try s
+    void (async () => {
+      try {
         const [bm, hl] = await Promise.all([db.getBookmarks(bookId), db.getHighlights(bookId)])
         if (cancelled) return
         setBookmarks(bm)
         setHighlights(hl)
-      } catch s
+      } catch {
         if (cancelled) return
         setBookmarks([])
         setHighlights([])
-      } finally s
+      } finally {
         if (!cancelled) setLoaded(true)
       }
     })()
-    return () => s
+    return () => {
       cancelled = true
     }
   }, [bookId])
 
   // 切换筛选时清掉未完成的删除确认，避免「看不见的按钮仍是确认态」
-  useEffect(() => s
+  useEffect(() => {
     setConfirmId(null)
   }, [tab])
 
-  const titleById = useMemo(() => s
+  const titleById = useMemo(() => {
     const map = new Map<string, string>()
     for (const b of books) map.set(b.id, b.title)
     return map
   }, [books])
 
-  const rows = useMemo<NoteRow[]>(() => s
-    const bookmarkRows: NoteRow[] = bookmarks.map((b) => (s
+  const rows = useMemo<NoteRow[]>(() => {
+    const bookmarkRows: NoteRow[] = bookmarks.map((b) => ({
       kind: 'bookmark',
       id: b.id,
       bookId: b.bookId,
@@ -134,7 +134,7 @@ export function NotesScreen(s onBack, bookId, onJump, onShowAll }: NotesScreenPr
       note: b.note,
       createdAt: b.createdAt,
     }))
-    const highlightRows: NoteRow[] = highlights.map((h) => (s
+    const highlightRows: NoteRow[] = highlights.map((h) => ({
       kind: 'highlight',
       id: h.id,
       bookId: h.bookId,
@@ -154,7 +154,7 @@ export function NotesScreen(s onBack, bookId, onJump, onShowAll }: NotesScreenPr
   )
 
   const counts = useMemo(
-    () => (s
+    () => ({
       all: rows.length,
       bookmark: rows.filter((r) => r.kind === 'bookmark').length,
       highlight: rows.filter((r) => r.kind === 'highlight').length,
@@ -163,10 +163,10 @@ export function NotesScreen(s onBack, bookId, onJump, onShowAll }: NotesScreenPr
   )
 
   /** 分组：全局模式按书（组内保持时间倒序），书内模式按天。 */
-  const sections = useMemo(() => s
-    if (bookId) s
+  const sections = useMemo(() => {
+    if (bookId) {
       const byDay = new Map<string, NoteRow[]>()
-      for (const row of visibleRows) s
+      for (const row of visibleRows) {
         const key = localDayKey(row.createdAt)
         const bucket = byDay.get(key) ?? []
         bucket.push(row)
@@ -174,80 +174,80 @@ export function NotesScreen(s onBack, bookId, onJump, onShowAll }: NotesScreenPr
       }
       return [...byDay.entries()]
         .sort((a, b) => (a[0] < b[0] ? 1 : -1))
-        .map(([key, items]) => (s key, title: formatSectionDay(key), items }))
+        .map(([key, items]) => ({ key, title: formatSectionDay(key), items }))
     }
     const byBook = new Map<string, NoteRow[]>()
-    for (const row of visibleRows) s
+    for (const row of visibleRows) {
       const bucket = byBook.get(row.bookId) ?? []
       bucket.push(row)
       byBook.set(row.bookId, bucket)
     }
     return [...byBook.entries()]
       .sort((a, b) => (b[1][0]?.createdAt ?? 0) - (a[1][0]?.createdAt ?? 0))
-      .map(([id, items]) => (s key: id, title: titleById.get(id) ?? '已删除的书', items }))
+      .map(([id, items]) => ({ key: id, title: titleById.get(id) ?? '已删除的书', items }))
   }, [bookId, visibleRows, titleById])
 
-  async function handleDelete(row: NoteRow): Promise<void> s
-    if (confirmId !== row.id) s
+  async function handleDelete(row: NoteRow): Promise<void> {
+    if (confirmId !== row.id) {
       setConfirmId(row.id)
       return
     }
     setConfirmId(null)
-    if (row.kind === 'bookmark') s
+    if (row.kind === 'bookmark') {
       await removeBookmark(row.id)
       setBookmarks((prev) => prev.filter((b) => b.id !== row.id))
-    } else s
+    } else {
       await removeHighlight(row.id)
       setHighlights((prev) => prev.filter((h) => h.id !== row.id))
     }
   }
 
-  function openEditor(row: NoteRow): void s
-    setEditing(s kind: row.kind, id: row.id, value: row.note })
+  function openEditor(row: NoteRow): void {
+    setEditing({ kind: row.kind, id: row.id, value: row.note })
   }
 
-  async function saveNote(): Promise<void> s
+  async function saveNote(): Promise<void> {
     if (!editing) return
     const note = editing.value.trim()
-    if (editing.kind === 'bookmark') s
+    if (editing.kind === 'bookmark') {
       await updateBookmarkNote(editing.id, note)
-      setBookmarks((prev) => prev.map((b) => (b.id === editing.id ? s ...b, note } : b)))
-    } else s
+      setBookmarks((prev) => prev.map((b) => (b.id === editing.id ? { ...b, note } : b)))
+    } else {
       await updateHighlightNote(editing.id, note)
-      setHighlights((prev) => prev.map((h) => (h.id === editing.id ? s ...h, note } : h)))
+      setHighlights((prev) => prev.map((h) => (h.id === editing.id ? { ...h, note } : h)))
     }
     setEditing(null)
   }
 
-  function renderRow(row: NoteRow) s
+  function renderRow(row: NoteRow) {
     const editingThis = editing !== null && editing.id === row.id && editing.kind === row.kind
     const confirming = confirmId === row.id
     const jump = (): void => onJump(row.bookId, row.chapterIndex, row.chapterOffset)
     return (
-      <div className="note-item" key=s`$srow.kind}-$srow.id}`}>
+      <div className="note-item" key={`${row.kind}-${row.id}`}>
         <div className="note-item__head">
-          <span className="note-item__chapter">第 srow.chapterIndex + 1} 章</span>
-          <span className="note-item__time">sformatRelativeTime(row.createdAt)}</span>
+          <span className="note-item__chapter">第 {row.chapterIndex + 1} 章</span>
+          <span className="note-item__time">{formatRelativeTime(row.createdAt)}</span>
         </div>
 
         <div
           className="note-item__text"
           role="button"
-          tabIndex=s0}
+          tabIndex={0}
           aria-label="跳转到原文位置"
-          onClick=sjump}
-          onKeyDown=s(e) => s
-            if (e.key === 'Enter' || e.key === ' ') s
+          onClick={jump}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault()
               jump()
             }
           }}
-          style=srow.color ? s borderLeftColor: row.color } : undefined}
+          style={row.color ? { borderLeftColor: row.color } : undefined}
         >
-          srow.kind === 'highlight' ? (
+          {row.kind === 'highlight' ? (
             <span
               aria-hidden="true"
-              style=ss
+              style={{
                 display: 'inline-block',
                 width: 8,
                 height: 8,
@@ -258,52 +258,52 @@ export function NotesScreen(s onBack, bookId, onJump, onShowAll }: NotesScreenPr
               }}
             />
           ) : null}
-          srow.text || '（无摘录）'}
+          {row.text || '（无摘录）'}
         </div>
 
-        seditingThis ? (
-          <div style=ss marginTop: 8 }}>
+        {editingThis ? (
+          <div style={{ marginTop: 8 }}>
             <textarea
-              value=sediting.value}
-              onChange=s(e) => setEditing(s ...editing, value: e.target.value })}
-              rows=s3}
+              value={editing.value}
+              onChange={(e) => setEditing({ ...editing, value: e.target.value })}
+              rows={3}
               placeholder="写点想法…"
               aria-label="笔记备注"
               autoFocus
-              style=ss fontSize: 13.5, resize: 'vertical' }}
+              style={{ fontSize: 13.5, resize: 'vertical' }}
             />
             <div className="note-item__actions">
-              <button type="button" className="btn" onClick=s() => setEditing(null)}>
+              <button type="button" className="btn" onClick={() => setEditing(null)}>
                 取消
               </button>
-              <button type="button" className="btn btn--primary" onClick=s() => void saveNote()}>
+              <button type="button" className="btn btn--primary" onClick={() => void saveNote()}>
                 保存
               </button>
             </div>
           </div>
         ) : row.note ? (
-          <div className="note-item__note">srow.note}</div>
+          <div className="note-item__note">{row.note}</div>
         ) : null}
 
-        s!editingThis ? (
+        {!editingThis ? (
           <div className="note-item__actions">
             <button
               type="button"
               className="btn btn--ghost"
-              onClick=s() => openEditor(row)}
-              aria-label=srow.note ? '编辑备注' : '添加备注'}
+              onClick={() => openEditor(row)}
+              aria-label={row.note ? '编辑备注' : '添加备注'}
             >
-              srow.note ? '编辑备注' : '添加备注'}
+              {row.note ? '编辑备注' : '添加备注'}
             </button>
             <button
               type="button"
               className="btn btn--danger"
-              onClick=s() => void handleDelete(row)}
-              aria-label=sconfirming ? `确认删除「$srow.text.slice(0, 8)}」` : '删除'}
-              style=sconfirming ? s fontWeight: 700 } : undefined}
+              onClick={() => void handleDelete(row)}
+              aria-label={confirming ? `确认删除「${row.text.slice(0, 8)}」` : '删除'}
+              style={confirming ? { fontWeight: 700 } : undefined}
             >
-              <IconTrash size=s16} />
-              sconfirming ? '确认删除' : '删除'}
+              <IconTrash size={16} />
+              {confirming ? '确认删除' : '删除'}
             </button>
           </div>
         ) : null}
@@ -317,50 +317,50 @@ export function NotesScreen(s onBack, bookId, onJump, onShowAll }: NotesScreenPr
         <button
           type="button"
           aria-label="返回"
-          onClick=sonBack}
-          style=ss background: 'transparent' }}
+          onClick={onBack}
+          style={{ background: 'transparent' }}
         >
           <IconBack />
         </button>
-        <div className="topbar__title">sbookId ? '本书笔记' : '笔记'}</div>
-        sbookId && onShowAll ? (
+        <div className="topbar__title">{bookId ? '本书笔记' : '笔记'}</div>
+        {bookId && onShowAll ? (
           <button
             type="button"
             className="btn btn--ghost"
-            onClick=sonShowAll}
+            onClick={onShowAll}
             aria-label="查看全部笔记"
-            style=ss minHeight: 36, padding: '0 8px', fontSize: 12.5, flexShrink: 0 }}
+            style={{ minHeight: 36, padding: '0 8px', fontSize: 12.5, flexShrink: 0 }}
           >
             全部笔记
-            <IconArrowRight size=s15} />
+            <IconArrowRight size={15} />
           </button>
         ) : (
-          <div aria-hidden="true" style=ss width: 44, minWidth: 44, flexShrink: 0 }} />
+          <div aria-hidden="true" style={{ width: 44, minWidth: 44, flexShrink: 0 }} />
         )}
       </div>
 
-      s!bookId ? (
-        <div className="segmented" style=ss margin: '10px 16px 6px', flexWrap: 'nowrap' }}>
-          sTABS.map((t) => (
+      {!bookId ? (
+        <div className="segmented" style={{ margin: '10px 16px 6px', flexWrap: 'nowrap' }}>
+          {TABS.map((t) => (
             <button
               type="button"
-              key=st.id}
-              className=stab === t.id ? 'segmented__item--active' : undefined}
-              aria-pressed=stab === t.id}
-              onClick=s() => setTab(t.id)}
-              style=ss flex: 1 }}
+              key={t.id}
+              className={tab === t.id ? 'segmented__item--active' : undefined}
+              aria-pressed={tab === t.id}
+              onClick={() => setTab(t.id)}
+              style={{ flex: 1 }}
             >
-              st.label} scounts[t.id]}
+              {t.label} {counts[t.id]}
             </button>
           ))}
         </div>
       ) : null}
 
       <div className="scroll-area">
-        sloaded && visibleRows.length === 0 ? (
+        {loaded && visibleRows.length === 0 ? (
           <div className="empty">
             <div className="empty__icon">
-              <IconNotes size=s34} />
+              <IconNotes size={34} />
             </div>
             <div className="empty__title">还没有书签和笔记</div>
             <div className="empty__desc">
@@ -369,12 +369,12 @@ export function NotesScreen(s onBack, bookId, onJump, onShowAll }: NotesScreenPr
           </div>
         ) : (
           sections.map((section) => (
-            <div key=ssection.key}>
+            <div key={section.key}>
               <div className="section-title">
-                ssection.title} · ssection.items.length} 条
+                {section.title} · {section.items.length} 条
               </div>
-              <div className="card card--flat" style=ss margin: '0 0 6px' }}>
-                ssection.items.map((row) => renderRow(row))}
+              <div className="card card--flat" style={{ margin: '0 0 6px' }}>
+                {section.items.map((row) => renderRow(row))}
               </div>
             </div>
           ))

@@ -1,4 +1,4 @@
-﻿/* ============================================================
+/* ============================================================
    墨阅 · 设计系统
    格调：现代极简 · 纸感暖色（仿微信读书 / Apple Books）
    原则：
@@ -685,17 +685,6 @@ textarea:focus {
   height: 100%;
   background: var(--reader-fg-soft, var(--ink-mute));
   opacity: 0.22;
-}
-
-/* 兼容旧类名（滚动模式下仍会用到） */
-.reader__footer {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-size: 0.62em;
-  color: var(--reader-fg-soft, var(--ink-mute));
-  padding-top: 1.1em;
-  flex-shrink: 0;
 }
 
 /* —— 翻页动画 —— */

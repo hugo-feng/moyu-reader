@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 阅读器主界面。
  *
  * 这是整个应用最核心也最复杂的组件，集中了四件难事：
@@ -549,7 +549,6 @@ export function ReaderScreen({ book, chapters, onClose, onOpenSearch, onOpenNote
     return locateMatches(chapter.content, tocQuery)
   }, [tocQuery, chapter])
 
-  const globalPages = Math.max(1, pages.length)
   const bookPercent = useMemo(() => {
     const total = totalCharCount(chapters)
     if (total <= 0 || !chapter || !currentPage) return 0
@@ -653,6 +652,13 @@ export function ReaderScreen({ book, chapters, onClose, onOpenSearch, onOpenNote
           className={`reader__page ${flipClass}`}
           key={`${chapterIndex}-${pageIndex}-${flipToken}`}
           style={{ transform: isScrollMode ? undefined : undefined } as CSSProperties}
+          /* 把分页状态暴露到 DOM 上，供端到端测试断言。
+             测试不该靠猜类名去反推「这一章到底分了几页 / 当前是第几页」——
+             那正是断言写错、把真 bug 掩盖掉的地方。 */
+          data-chapter-index={chapterIndex}
+          data-page-index={pageIndex}
+          data-page-count={pages.length}
+          data-chapter-title={chapter?.title ?? ''}
         >
           {/* 天头：书眉。按真实书籍体例，书眉只出现在次页起 ——
               首页是章首，标题本身就在版心内，再顶一条书眉会重复。 */}

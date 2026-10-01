@@ -69,7 +69,8 @@ const inspect = () =>
     return {
       chapterNo: noEl ? noEl.textContent : null,
       chapterTitle: titleEl ? titleEl.textContent : null,
-      footer: document.querySelector('.reader__footer')?.textContent ?? '',
+      folio: document.querySelector('.reader__folio-number')?.textContent ?? '',
+      runningHead: document.querySelector('.reader__running-head')?.textContent ?? '',
       paragraphs,
     }
   })
@@ -89,10 +90,11 @@ if (!firstView.chapterTitle) {
     await new Promise((r) => setTimeout(r, 700))
     const probe = await page.evaluate(() => ({
       hasTitle: document.querySelector('.reader__chapter-title') !== null,
-      footer: document.querySelector('.reader__footer')?.textContent ?? '',
+      folio: document.querySelector('.reader__folio-number')?.textContent ?? '',
+      runningHead: document.querySelector('.reader__running-head')?.textContent ?? '',
     }))
     if (probe.hasTitle) {
-      console.log(`  第 ${i + 1} 次翻页后到达带标题章节: ${probe.footer}`)
+      console.log(`  第 ${i + 1} 次翻页后到达带标题章节: 第 ${probe.folio} 页`)
       break
     }
   }

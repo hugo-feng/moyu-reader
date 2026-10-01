@@ -244,8 +244,18 @@ async function main() {
   const readerText = await page.$eval('.reader__text', (el) => el.textContent ?? '')
   step('正文渲染', readerText.length > 0, `${readerText.length} 字符`)
 
-  const footer = await page.$eval('.reader__footer', (el) => el.textContent ?? '').catch(() => '')
-  step('页脚显示章节与进度', footer.length > 0, `"${footer.trim()}"`)
+  // 地脚：真书的页码只是一个数字，不带章节名/百分比。
+  // 章节名改由「天头书眉」承担，且书眉只在次页起出现（首页章标题已在版心内）。
+  const folioRaw = await page.$eval('.reader__folio-number', (el) => el.textContent ?? '').catch(() => '')
+  const folioNum = Number(folioRaw.trim())
+  step(
+    '地脚显示页码',
+    Number.isInteger(folioNum) && folioNum >= 1,
+    `页码="${folioRaw.trim()}"`,
+  )
+
+  const firstHead = await page.$('.reader__running-head').catch(() => null)
+  step('首页不重复印书眉', firstHead === null, firstHead ? '首页出现了书眉（与章标题重复）' : '首页无书眉')
 
   // ============ 4. 翻页 ============
   const firstPageText = readerText
@@ -255,6 +265,12 @@ async function main() {
   const secondPageText = await page.$eval('.reader__text', (el) => el.textContent ?? '')
   step('点击右侧翻页', secondPageText !== firstPageText, secondPageText === firstPageText ? '正文未变化' : '正文已切换')
   await shot('04-翻页后')
+
+  // 注意：这里翻页是**跨章**的（示例书的「前言」章只有一页），落点是下一章第 0 页。
+  // 章首页按书籍体例既无书眉、页码也回到本章第 1 页 —— 所以此处只能断言「无书眉」，
+  // 「次页起印书眉 / 页码递增」要留到第 6b 步在有多个页的章节内部验证。
+  const headAfterFlip = await page.$('.reader__running-head').catch(() => null)
+  step('跨章后落在章首页（无书眉）', headAfterFlip === null, headAfterFlip ? '出现了书眉' : '章首页无书眉')
 
   // 点左侧回到上一页
   await page.click('.reader__zones button:first-child')
@@ -285,14 +301,70 @@ async function main() {
     step('目录面板列出章节', tocItems > 0, `${tocItems} 项`)
     await shot('06-目录面板')
 
-    // 跳到第 5 章
-    if (tocItems >= 5) {
-      const items = await page.$$('.toc-item')
-      await items[4].click()
-      await new Promise((r) => setTimeout(r, 1200))
-      const afterJump = await page.$eval('.reader__footer', (el) => el.textContent ?? '')
-      step('目录跳转章节', afterJump.includes('章'), `"${afterJump.trim()}"`)
-      await shot('07-跳章后')
+    // 跳到演示书里刻意写长的那一章（第十二章 山雨欲来），它是唯一能跨页的章节。
+    // 用标题文本定位而不是下标 —— 目录项与章节下标相差 1（前面还有「前言」），
+    // 按下标点会静默点到隔壁章，让后面的断言全部落在错误的前提上。
+    const longTitle = '第十二章 山雨欲来'
+    const clicked = await page.evaluate((t) => {
+      const hit = [...document.querySelectorAll('.toc-item')].find((el) =>
+        (el.textContent ?? '').includes(t),
+      )
+      if (!hit) return false
+      hit.click()
+      return true
+    }, longTitle)
+    step('目录定位到长章节', clicked, clicked ? longTitle : '目录中未找到该章')
+    await new Promise((r) => setTimeout(r, 1200))
+
+    // 分页状态直接从 DOM 读，不靠猜。
+    const readState = () =>
+      page.evaluate(() => {
+        const el = document.querySelector('.reader__page')
+        if (!el) return null
+        return {
+          chapter: Number(el.getAttribute('data-chapter-index')),
+          page: Number(el.getAttribute('data-page-index')),
+          count: Number(el.getAttribute('data-page-count')),
+          title: el.getAttribute('data-chapter-title') ?? '',
+          hasHead: document.querySelector('.reader__running-head') !== null,
+          folio: Number((document.querySelector('.reader__folio-number')?.textContent ?? '').trim()),
+        }
+      })
+
+    const st0 = await readState()
+    step(
+      '长章节被正确分页',
+      !!st0 && st0.title.includes('山雨欲来') && st0.count > 1,
+      st0 ? `章="${st0.title}" 共 ${st0.count} 页` : '读不到分页状态',
+    )
+
+    const afterJump = await page.$eval('.reader__chapter-title', (el) => el.textContent ?? '').catch(() => '')
+    step('目录跳转章节', afterJump.trim().length > 0, `章标题="${afterJump.trim()}"`)
+    await shot('07-跳章后')
+
+    // 章首页的书籍体例：章标题已在版心内，天头不再重复印书眉。
+    step('章首页不重复印书眉', st0 !== null && !st0.hasHead, st0?.hasHead ? '章首页出现了书眉' : '章首页无书眉')
+
+    // ============ 6b. 章节内翻页的书籍体例 ============
+    // 前面的翻页都是**跨章**的（其余章节恰好一页），所以只有在这里 ——
+    // 同一章内部翻到第 2 页 —— 才能真正检验「次页起印书眉、页码递增」。
+    if (st0 && st0.count > 1 && st0.page === 0) {
+      await page.click('.reader__zones button:last-child')
+      await new Promise((r) => setTimeout(r, 800))
+      const st1 = await readState()
+
+      step(
+        '章节内翻页真的翻到了第 2 页',
+        !!st1 && st1.page === st0.page + 1 && st1.chapter === st0.chapter,
+        st1 ? `第 ${st0.page + 1} → 第 ${st1.page + 1} 页（章 ${st0.chapter} → ${st1.chapter}）` : '读不到状态',
+      )
+      step('章节次页印出天头书眉', !!st1 && st1.hasHead, st1?.hasHead ? '次页有书眉' : '次页无书眉')
+      step('章节内翻页页码递增', !!st1 && st1.folio === st0.folio + 1, `${st0.folio} → ${st1?.folio}`)
+
+      // 翻页不能丢字：第 2 页必须真的有正文，而不是空白页。
+      const page2Text = await page.$eval('.reader__text', (el) => (el.textContent ?? '').trim())
+      step('次页有正文（未丢字）', page2Text.length > 0, `${page2Text.length} 字符`)
+      await shot('07b-章节内次页')
     }
 
     // 关闭目录（面板底部工具栏此时被面板盖住，必须先关面板）
