@@ -44,6 +44,8 @@ import { lookup, normalizeQuery, type DictLookupResult } from '../engine/diction
 import { useAppState, savePosition, updateSettings, toast, addBookmark, addHighlight } from '../store'
 import { readerStyleVars, PAGE_MODE_LABELS } from './theme'
 import { subscribeSafeArea } from './safeArea'
+import { MorphGlyph } from './MorphGlyph'
+import { SEARCH_ICONS, THEME_ICONS } from './morphIcons'
 import {
   IconBack,
   IconBookmark,
@@ -51,14 +53,11 @@ import {
   IconDictionary,
   IconList,
   IconMinus,
-  IconMoon,
   IconNote,
   IconPause,
   IconPlay,
   IconPlus,
-  IconSearch,
   IconSpeaker,
-  IconSun,
   IconText,
 } from './icons'
 
@@ -846,14 +845,17 @@ export function ReaderScreen({ book, chapters, onClose, onOpenSearch, onOpenNote
           <ToolbarButton label="笔记" onClick={() => setSheet(sheet === 'notes' ? 'none' : 'notes')}>
             <IconNote />
           </ToolbarButton>
-          <ToolbarButton label="夜间" onClick={() => updateSettings({ theme: palette.dark ? 'paper' : 'night' })}>
-            {palette.dark ? <IconSun /> : <IconMoon />}
+          <ToolbarButton label={palette.dark ? '日间' : '夜间'} onClick={() => updateSettings({ theme: palette.dark ? 'paper' : 'night' })}>
+            {/* 月亮 ↔ 太阳用图标形变：两者形状接近，中间帧是干净的开合。
+                与 Android 端共用同一份路径数据与弹簧参数（见 morphIcons.ts）。 */}
+            <MorphGlyph paths={palette.dark ? THEME_ICONS.sun : THEME_ICONS.moon} size={20} />
           </ToolbarButton>
           <ToolbarButton label="自动阅读" onClick={() => setAutoReading((v) => !v)}>
             {autoReading ? <IconPause /> : <IconPlay />}
           </ToolbarButton>
           <ToolbarButton label="搜索" onClick={() => onOpenSearch?.(book.id)}>
-            <IconSearch />
+            {/* 放大镜 → 关闭：两条简笔的配对很自然，形变比直接换图标顺眼 */}
+            <MorphGlyph paths={SEARCH_ICONS.search} size={20} />
           </ToolbarButton>
           <ToolbarButton label="排版" onClick={() => setSheet(sheet === 'settings' ? 'none' : 'settings')}>
             <IconText />
