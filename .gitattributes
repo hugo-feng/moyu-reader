@@ -1,0 +1,41 @@
+# 换行符与文本规范化
+#
+# 为什么需要这个文件：仓库在 Windows 上开发，而 Git for Windows 默认
+# `core.autocrlf=true`，会把工作区的 LF 换成 CRLF。
+# 结果是每次提交都在刷 `LF will be replaced by CRLF` 警告，
+# 同一个文件在不同机器上算出的 blob 也不同 —— 协作时会出现
+# 「我这边没改，但 git 说整个文件都变了」的伪 diff。
+#
+# 规则：**仓库里统一存 LF**。
+
+* text=auto eol=lf
+
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.js    text eol=lf
+*.mjs   text eol=lf
+*.css   text eol=lf
+*.html  text eol=lf
+*.json  text eol=lf
+*.md    text eol=lf
+*.txt   text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+
+# 脚本
+*.sh    text eol=lf
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+
+# 二进制：禁止任何换行转换
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.webp  binary
+*.gif   binary
+*.ico   binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.zip   binary
+*.epub  binary

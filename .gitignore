@@ -1,4 +1,27 @@
-﻿node_modules/
+# 构建产物与依赖不入库 —— 可由 npm/pnpm 与源码完整重建。
+node_modules/
 dist/
+.vite/
+
+# 测试运行时产物：截图、基准数据、探针输出。
+# 这些是**每次运行都会变**的证据文件，入库只会让 diff 噪音化。
+# 真正需要长期保留的验证结论写在 README 里，而不是靠这些图片。
 test-artifacts/
+
+# 日志与临时文件
 *.log
+*.tmp
+*.bak
+*.orig
+*.rej
+
+# 系统
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.idea/
+.vscode/
+out/
+*.iml
