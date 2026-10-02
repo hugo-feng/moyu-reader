@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 设置页（应用级）。
  *
  * 与阅读器内的「排版」快速面板的分工：
@@ -7,6 +7,13 @@
  *
  * 两处写入的是同一份 `settings`，因此任何一处改动都会立即反映到另一处 ——
  * 这也是不把「设置」做成两份状态的原因。
+ *
+ * ## 为什么拆成两级
+ *
+ * 原先所有设置平铺在一页：25+ 行、要滚三四屏才能找到一项，
+ * 用户记不住东西在哪，改一个开关的成本过高。
+ * 现在一级只有 6 个分类入口，一眼看完；每项右侧显示**当前值摘要**
+ * （如「纸感 · 字号 19」），不进二级页也能确认关键状态。
  */
 
 import { useEffect, useRef, useState } from 'react'
@@ -19,15 +26,18 @@ import * as db from '../storage'
 import type { StoredDictionary } from '../storage'
 import { refreshBooks, toast, updateSettings, useAppState } from '../store'
 import {
+  IconArrowRight,
   IconBack,
   IconCheck,
   IconDictionary,
   IconEye,
   IconLightbulb,
   IconMinus,
+  IconNotes,
   IconPlus,
   IconRefresh,
   IconSpeaker,
+  IconText,
   IconTrash,
   IconUpload,
 } from './icons'
@@ -35,6 +45,18 @@ import {
 interface SettingsScreenProps {
   onBack: () => void
 }
+
+/** 一级分类。顺序即展示顺序：越常用的越靠前。 */
+type SettingsCategory = 'appearance' | 'reading' | 'speech' | 'dictionary' | 'data' | 'about'
+
+const SETTINGS_CATEGORIES: Array<{ id: SettingsCategory; title: string; icon: JSX.Element }> = [
+  { id: 'appearance', title: '外观与主题', icon: <IconEye size={20} /> },
+  { id: 'reading', title: '阅读排版', icon: <IconText size={20} /> },
+  { id: 'speech', title: '朗读', icon: <IconSpeaker size={20} /> },
+  { id: 'dictionary', title: '词典', icon: <IconDictionary size={20} /> },
+  { id: 'data', title: '数据与备份', icon: <IconNotes size={20} /> },
+  { id: 'about', title: '关于', icon: <IconLightbulb size={20} /> },
+]
 
 const PAGE_MODE_LABELS: Record<PageMode, string> = {
   simulation: '仿真',
@@ -58,6 +80,42 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
   const ttsSupported = typeof window !== 'undefined' && 'speechSynthesis' in window
   const dictSize = builtinDictionarySize()
 
+  /**
+   * 分类入口右侧的当前值摘要。
+   *
+   * 只放**最常被确认的那一两个值**，不是把所有设置列一遍 ——
+   * 列全了就退化成原来的长列表，分类也就白分了。
+   */
+  const categorySummary = (id: SettingsCategory): string => {
+    switch (id) {
+      case 'appearance': {
+        const theme = THEMES[settings.theme]
+        const bits = [theme?.name ?? '纸感']
+        if (settings.followSystemDark) bits.push('跟随系统')
+        if (settings.eyeCareWarmth > 0) bits.push(`护眼 ${Math.round(settings.eyeCareWarmth * 100)}%`)
+        return bits.join(' · ')
+      }
+      case 'reading': {
+        const font = FONT_STACKS[t.fontFamily]?.name ?? ''
+        return `${font} · ${t.fontSize}px · 行距 ${t.lineHeight.toFixed(1)} · ${PAGE_MODE_LABELS[settings.pageMode]}`
+      }
+      case 'speech':
+        return ttsSupported
+          ? `语速 ${settings.ttsRate.toFixed(1)}× · 音调 ${settings.ttsPitch.toFixed(1)}`
+          : '当前环境不支持语音合成'
+      case 'dictionary': {
+        // 注意：builtinDictionarySize() 返回的是 { zh, en } 而不是一个数字。
+        // 直接插值会渲染成「[object Object]」—— 这个错误真的发生过。
+        const size = builtinDictionarySize()
+        return `内置 中文 ${size.zh} / 英文 ${size.en} 条 · 自定义 ${dicts.length} 部`
+      }
+      case 'data':
+        return '导出 / 导入备份 · 清除全部数据'
+      case 'about':
+        return '版本 1.0.0 · 浏览器验证器'
+    }
+  }
+
   useEffect(() => {
     let cancelled = false
     void db.getDictionaries().then((list) => {
@@ -71,7 +129,6 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
   // ============================================================
   // 词典导入
   // ============================================================
-
   const handleDictFile = async (file: File) => {
     try {
       const text = await file.text()
@@ -182,18 +239,63 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
     }
   }
 
+  /** 当前打开的二级页；null 表示停在一级分类列表。 */
+  const [page, setPage] = useState<SettingsCategory | null>(null)
+
+  // —— 一级：分类入口 ——
+  if (page === null) {
+    return (
+      <div className="screen">
+        <div className="topbar">
+          <button aria-label="返回" onClick={onBack}>
+            <IconBack />
+          </button>
+          <div className="topbar__title">设置</div>
+          <span style={{ width: 44 }} />
+        </div>
+
+        <div className="scroll-area" style={{ paddingBottom: 40 }}>
+          <div style={{ padding: '10px 16px 4px' }} className="text-sm text-mute">
+            所有设置都即时生效，没有「保存」按钮。
+          </div>
+          {SETTINGS_CATEGORIES.map((cat) => (
+            <button
+              key={cat.id}
+              type="button"
+              className="category-card"
+              aria-label={`打开${cat.title}设置`}
+              onClick={() => setPage(cat.id)}
+            >
+              <span className="category-card__icon" aria-hidden="true">
+                {cat.icon}
+              </span>
+              <span className="category-card__body">
+                <span className="category-card__title">{cat.title}</span>
+                <span className="category-card__summary">{categorySummary(cat.id)}</span>
+              </span>
+              <IconArrowRight size={17} />
+            </button>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="screen">
       <div className="topbar">
-        <button aria-label="返回" onClick={onBack}>
+        <button aria-label="返回设置分类" onClick={() => setPage(null)}>
           <IconBack />
         </button>
-        <div className="topbar__title">设置</div>
+        <div className="topbar__title">
+          {SETTINGS_CATEGORIES.find((c) => c.id === page)?.title ?? '设置'}
+        </div>
         <span style={{ width: 44 }} />
       </div>
 
       <div className="scroll-area" style={{ paddingBottom: 40 }}>
         {/* —— 外观 —— */}
+        {page === 'appearance' && (
         <div className="setting-group">
           <div className="setting-group__title">外观</div>
 
@@ -287,8 +389,10 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
             </button>
           </div>
         </div>
+        )}
 
         {/* —— 阅读 —— */}
+        {page === 'reading' && (
         <div className="setting-group">
           <div className="setting-group__title">阅读</div>
 
@@ -408,8 +512,10 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
             />
           </div>
         </div>
+        )}
 
         {/* —— 朗读 —— */}
+        {page === 'speech' && (
         <div className="setting-group">
           <div className="setting-group__title">朗读（TTS）</div>
           {!ttsSupported && (
@@ -459,8 +565,10 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
             </button>
           </div>
         </div>
+        )}
 
         {/* —— 词典 —— */}
+        {page === 'dictionary' && (
         <div className="setting-group">
           <div className="setting-group__title">词典</div>
           <div className="setting-row">
@@ -508,8 +616,10 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
             </div>
           ))}
         </div>
+        )}
 
         {/* —— 数据 —— */}
+        {page === 'data' && (
         <div className="setting-group">
           <div className="setting-group__title">数据</div>
           <div className="setting-row">
@@ -557,8 +667,10 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
             </div>
           )}
         </div>
+        )}
 
         {/* —— 关于 —— */}
+        {page === 'about' && (
         <div className="setting-group">
           <div className="setting-group__title">关于</div>
           <div className="setting-row">
@@ -585,6 +697,7 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
             </p>
           </div>
         </div>
+        )}
 
         <div style={{ padding: '10px 16px 30px' }}>
           <button

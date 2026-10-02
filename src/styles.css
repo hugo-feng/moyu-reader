@@ -1442,6 +1442,65 @@ textarea:focus {
   }
 }
 
+/**
+ * 设置页的分类入口卡片。
+ *
+ * 一级页面只放这几个入口，因此它们要一眼看完、且能直接读到当前值 ——
+ * 右侧摘要承担的就是「不进二级页也能确认关键状态」这件事。
+ */
+.category-card {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  width: calc(100% - 32px);
+  margin: 5px 16px;
+  padding: 14px;
+  border-radius: var(--radius);
+  background: var(--paper-card);
+  border: 1px solid var(--line);
+  text-align: left;
+  transition: background 0.16s var(--ease), transform 0.16s var(--ease);
+}
+
+.category-card:active {
+  transform: scale(0.985);
+  background: var(--paper-raise);
+}
+
+.category-card__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 11px;
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+}
+
+.category-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.category-card__title {
+  font-size: 14.5px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.category-card__summary {
+  font-size: 11.5px;
+  color: var(--ink-mute);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .chip-row {
   display: flex;
   gap: 8px;

@@ -521,38 +521,105 @@ async function main() {
   await shot('14-笔记页')
   step('笔记页可打开', (await page.$('.screen')) !== null)
 
-  // ============ 13. 设置页 ============
+  // ============ 13. 设置页（两级结构） ============
   await page.evaluate(() => {
     const btn = document.querySelector('[aria-label="设置"]')
     if (btn) btn.click()
   })
   await new Promise((r) => setTimeout(r, 1200))
+
+  // 一级：分类入口。这里**不再有** setting-row / switch —— 都收进二级页了。
+  const categoryCards = await page.$$eval('.category-card', (els) => els.length)
+  step('设置页显示分类入口', categoryCards >= 5, `${categoryCards} 个分类`)
+  const summaries = await page.$$eval('.category-card__summary', (els) =>
+    els.map((e) => (e.textContent ?? '').trim()),
+  )
+  step(
+    '分类入口显示当前值摘要',
+    summaries.length === categoryCards && summaries.every((s) => s.length > 0),
+    summaries[0] ?? '',
+  )
+  await shot('15-设置页-分类入口')
+
+  /** 点开一个分类。返回是否成功进入二级页（用页面状态验证，不只看点击是否发出）。 */
+  const openCategory = async (label) => {
+    const found = await page.evaluate((l) => {
+      const hit = [...document.querySelectorAll('.category-card')].find((el) =>
+        (el.getAttribute('aria-label') ?? '').includes(l),
+      )
+      if (!hit) return null
+      // 直接派发 click，避免 Puppeteer 因元素在滚动区外而要求先滚动
+      hit.click()
+      return hit.getAttribute('aria-label')
+    }, label)
+    await new Promise((r) => setTimeout(r, 800))
+    const entered = await page.evaluate(() => document.querySelector('.category-card') === null)
+    if (!found) console.log(`    [debug] 找不到分类卡片：${label}`)
+    else if (!entered) console.log(`    [debug] 点了「${found}」但没进入二级页`)
+    return entered
+  }
+
+  /** 从二级页返回一级。 */
+  const backToCategories = async () => {
+    const ok = await page.evaluate(() => {
+      const hit = document.querySelector('[aria-label="返回设置分类"]')
+      if (!hit) return false
+      hit.click()
+      return true
+    })
+    await new Promise((r) => setTimeout(r, 700))
+    return ok
+  }
+
+  // 外观与主题：主题选择器在这个二级页里
+  step('进入外观分类', await openCategory('外观'))
   const themeSwatches = await page.$$eval('.theme-swatch', (els) => els.length)
-  step('设置页主题选择器', themeSwatches >= 4, `${themeSwatches} 个主题`)
-  const settingRows = await page.$$eval('.setting-row', (els) => els.length)
-  step('设置项渲染', settingRows > 10, `${settingRows} 行设置`)
+  step('外观页主题选择器', themeSwatches >= 4, `${themeSwatches} 个主题`)
   const switches = await page.$$eval('.switch', (els) => els.length)
-  step('开关控件渲染', switches > 0, `${switches} 个开关`)
-  await shot('15-设置页')
+  step('外观页开关控件渲染', switches > 0, `${switches} 个开关`)
+  await shot('16-设置页-外观')
 
-  // 滚动到设置页底部截图（验证朗读/词典/数据/关于分区）
-  await page.evaluate(() => {
-    const area = document.querySelector('.scroll-area')
-    if (area) area.scrollTop = area.scrollHeight
-  })
-  await new Promise((r) => setTimeout(r, 700))
-  await shot('16-设置页底部')
-
-  // 切主题验证即时生效
+  // 切主题验证即时生效。
+  // 注意不能写死下标：THEMES 的顺序是 paper/sepia/green/night/ink，
+  // 而前面的阅读器测试已经把主题切成了 night —— 点 swatch[3] 等于点了当前值，
+  // 断言必然失败（而且是「测试写错」而不是功能坏）。
+  // 这里改成挑第一个与当前不同的主题。
   const themeBefore = await page.evaluate(() => document.documentElement.dataset.theme)
-  await page.evaluate(() => {
-    const swatch = document.querySelectorAll('.theme-swatch')[3]
-    if (swatch) swatch.click()
-  })
-  await new Promise((r) => setTimeout(r, 800))
+  const picked = await page.evaluate((current) => {
+    const target = [...document.querySelectorAll('.theme-swatch')].find(
+      (el) => !el.className.includes('--active') && el.getAttribute('aria-label') !== `主题 ${current}`,
+    )
+    if (!target) return null
+    target.click()
+    return target.getAttribute('aria-label')
+  }, themeBefore)
+  await new Promise((r) => setTimeout(r, 900))
   const themeAfter = await page.evaluate(() => document.documentElement.dataset.theme)
-  step('设置页切换主题生效', themeBefore !== themeAfter || themeAfter !== undefined, `${themeBefore} → ${themeAfter}`)
-  await shot('17-主题切换')
+  step(
+    '设置页切换主题生效',
+    themeAfter !== themeBefore,
+    `${themeBefore} → ${themeAfter}（点了「${picked}」）`,
+  )
+
+  step('返回分类列表', await backToCategories())
+  step('返回后重新显示分类入口', (await page.$$eval('.category-card', (e) => e.length)) >= 5)
+
+  // 阅读排版：设置行最密集的一页
+  step('进入阅读排版', await openCategory('阅读排版'))
+  const settingRows = await page.$$eval('.setting-row', (els) => els.length)
+  step('阅读排版页设置项渲染', settingRows > 5, `${settingRows} 行设置`)
+  await shot('17-设置页-阅读排版')
+  await backToCategories()
+
+  // 数据与备份：确认这一页也能正常打开（备份/清除都在这里）
+  step('进入数据与备份', await openCategory('数据与备份'))
+  const dataRows = await page.$$eval('.setting-row', (els) => els.length)
+  step('数据页渲染', dataRows > 0, `${dataRows} 行`)
+  await backToCategories()
+
+  step('关于页可打开', await openCategory('关于'))
+  await shot('18-设置页-关于')
+  await backToCategories()
 
   // ============ 14. 导入页 ============
   await page.evaluate(() => {
