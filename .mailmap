@@ -1,0 +1,18 @@
+# 提交者身份归并
+#
+# 作用：把同一个人的多种署名归并成一个规范身份。
+# `git log`、`git shortlog`、GitHub 的贡献统计都会读这个文件。
+#
+# 为什么需要它：本仓库早期的提交用过 `dev <dev@local>` 与 `agent <agent@local>`
+# 这类占位身份（提交时用 `git -c user.name=... ` 临时指定，因为机器上没配全局身份）。
+# 这类历史无人认领，等于没有作者信息。
+#
+# 历史本身已经用 filter-branch 重写过（见 DEVELOPMENT.md），
+# 这里保留映射规则是为了：
+#   1. 万一还有残留的旧署名，显示时会被归并；
+#   2. 将来若又从别的机器引入了占位身份，加一行即可，不必再改写历史。
+
+hugo-feng <64069779+hugo-feng@users.noreply.github.com> <dev@local>
+hugo-feng <64069779+hugo-feng@users.noreply.github.com> <agent@local>
+hugo-feng <64069779+hugo-feng@users.noreply.github.com> dev
+hugo-feng <64069779+hugo-feng@users.noreply.github.com> agent
