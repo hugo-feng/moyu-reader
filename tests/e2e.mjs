@@ -580,24 +580,28 @@ async function main() {
   await shot('16-设置页-外观')
 
   // 切主题验证即时生效。
-  // 注意不能写死下标：THEMES 的顺序是 paper/sepia/green/night/ink，
-  // 而前面的阅读器测试已经把主题切成了 night —— 点 swatch[3] 等于点了当前值，
-  // 断言必然失败（而且是「测试写错」而不是功能坏）。
-  // 这里改成挑第一个与当前不同的主题。
-  const themeBefore = await page.evaluate(() => document.documentElement.dataset.theme)
-  const picked = await page.evaluate((current) => {
+  //
+  // 两个坑，都踩过：
+  //   1. 读的必须是 **data-theme-id**（真实主题 id）而不是 data-theme ——
+  //      后者只记明暗（night/light），纸白与羊皮都是浅色，读它永远是 light。
+  //   2. 判定「当前是哪个」不能用 aria-label 与 themeId 比：
+  //      themeId 是英文（paper），aria-label 是中文名（「主题 纸白」），
+  //      两者永不相等，于是表达式会选中第一个 swatch —— 恰好是当前那个，
+  //      点它等于没换。可靠的做法是看 `--active` 类。
+  const themeBefore = await page.evaluate(() => document.documentElement.dataset.themeId)
+  const picked = await page.evaluate(() => {
     const target = [...document.querySelectorAll('.theme-swatch')].find(
-      (el) => !el.className.includes('--active') && el.getAttribute('aria-label') !== `主题 ${current}`,
+      (el) => !el.className.includes('--active'),
     )
     if (!target) return null
     target.click()
     return target.getAttribute('aria-label')
-  }, themeBefore)
+  })
   await new Promise((r) => setTimeout(r, 900))
-  const themeAfter = await page.evaluate(() => document.documentElement.dataset.theme)
+  const themeAfter = await page.evaluate(() => document.documentElement.dataset.themeId)
   step(
     '设置页切换主题生效',
-    themeAfter !== themeBefore,
+    picked !== null && themeAfter !== themeBefore,
     `${themeBefore} → ${themeAfter}（点了「${picked}」）`,
   )
 
