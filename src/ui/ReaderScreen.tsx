@@ -43,6 +43,7 @@ import { stripLeadingHeading } from '../engine/epub'
 import { lookup, normalizeQuery, type DictLookupResult } from '../engine/dictionary'
 import { useAppState, savePosition, updateSettings, toast, addBookmark, addHighlight } from '../store'
 import { readerStyleVars, PAGE_MODE_LABELS } from './theme'
+import { subscribeSafeArea } from './safeArea'
 import {
   IconBack,
   IconBookmark,
@@ -149,6 +150,8 @@ export function ReaderScreen({ book, chapters, onClose, onOpenSearch, onOpenNote
   const textRef = useRef<HTMLDivElement>(null)
 
   const [stageSize, setStageSize] = useState({ width: 0, height: 0 })
+  // 设备安全区：分页必须知道它，否则会把末行排到系统栏底下
+  const [safeArea, setSafeArea] = useState({ top: 0, bottom: 0 })
   const [chapterIndex, setChapterIndex] = useState(position?.chapterIndex ?? 0)
   const [pageIndex, setPageIndex] = useState(0)
   const [sheet, setSheet] = useState<SheetKind>('none')
@@ -191,18 +194,76 @@ export function ReaderScreen({ book, chapters, onClose, onOpenSearch, onOpenNote
     return () => ro.disconnect()
   }, [])
 
+  // 订阅安全区变化（首次探测完成、转屏、以及测试改写 override 时都会触发）
+  useEffect(() => subscribeSafeArea(setSafeArea), [])
+
+  // —— 版心内「非正文」部件的高度，必须从可用高度里扣掉 ——
+  /**
+   * 章标题（章节序号 + 标题）与地脚页码都占据版心的纵向空间，
+   * 但分页器如果不知道它们的存在，就会按「整块高度」去排行数，
+   * 结果排出来的页比实际能显示的多出一两行 —— 末行被推到屏幕外。
+   *
+   * 这里不靠硬编码估算，而是渲染一个**离屏探针**量出真实高度。
+   * 硬编码的问题是它随字号、字体、标题字数变化，永远估不准。
+   */
+  const headingProbeRef = useRef<HTMLDivElement>(null)
+  const folioRef = useRef<HTMLDivElement>(null)
+  const [headingHeight, setHeadingHeight] = useState(0)
+  const [folioHeight, setFolioHeight] = useState(0)
+
+  useLayoutEffect(() => {
+    const targets: Array<[HTMLDivElement | null, (v: number) => void]> = [
+      [headingProbeRef.current, setHeadingHeight],
+      [folioRef.current, setFolioHeight],
+    ]
+    const observers: ResizeObserver[] = []
+
+    for (const [el, setter] of targets) {
+      if (!el) continue
+      const measure = (): void => setter(Math.ceil(el.getBoundingClientRect().height))
+      measure()
+      if (typeof ResizeObserver !== 'undefined') {
+        const ro = new ResizeObserver(measure)
+        ro.observe(el)
+        observers.push(ro)
+      }
+    }
+
+    return () => {
+      for (const ro of observers) ro.disconnect()
+    }
+  }, [chapter, typography.fontSize, typography.lineHeight])
+
   // —— 分页计算 ——
+  /**
+   * 可用高度 = 视口高 − 上下留白（取页边距与安全区的较大值） − 地脚 − 章标题。
+   *
+   * 最后两项是「版心内的非正文部件」，早期版本漏掉了它们：
+   * 结果是排出来的页比容器实际能装的多出一两行，末行溢出到屏幕外 ——
+   * 用户看到的就是「字铺满后底部被遮挡」。高度全部来自实测，不靠估算。
+   */
   const metrics = useMemo(() => {
     const sidePad = typography.margin * 2
-    const topPad = Math.round(typography.margin * 0.9)
-    // 脚注（页码那一行）大约占 24px
-    const footer = 26
+    const padY = Math.round(typography.margin * 0.9)
+    const topInset = Math.max(padY, safeArea.top)
+    const bottomInset = Math.max(padY, safeArea.bottom)
+    const reserved = folioHeight + headingHeight
     return {
       contentWidth: Math.max(40, stageSize.width - sidePad),
-      contentHeight: Math.max(40, stageSize.height - topPad - footer),
+      contentHeight: Math.max(40, stageSize.height - topInset - bottomInset - reserved),
       lineHeight: Math.max(1, typography.fontSize * typography.lineHeight),
     }
-  }, [stageSize.width, stageSize.height, typography.margin, typography.fontSize, typography.lineHeight])
+  }, [
+    stageSize.width,
+    stageSize.height,
+    typography.margin,
+    typography.fontSize,
+    typography.lineHeight,
+    safeArea.top,
+    safeArea.bottom,
+    folioHeight,
+    headingHeight,
+  ])
 
   const pages: PageSlice[] = useMemo(() => {
     if (!chapter || metrics.contentWidth <= 40) return [{ index: 0, start: 0, end: chapter?.content.length ?? 0 }]
@@ -667,6 +728,27 @@ export function ReaderScreen({ book, chapters, onClose, onOpenSearch, onOpenNote
           )}
 
           <div className="reader__text" ref={textRef} style={{ userSelect: 'text' }}>
+            {/* 离屏探针：量出「章节序号 + 标题」的真实占高。
+                只有本页确实会渲染标题时才需要预留，否则会白白少排几行。
+                用绝对定位 + visibility:hidden 让它不参与布局、也不可见。 */}
+            {currentPage?.start === 0 && chapter?.detected && (
+              <div
+                ref={headingProbeRef}
+                aria-hidden="true"
+                style={{
+                  position: 'absolute',
+                  visibility: 'hidden',
+                  pointerEvents: 'none',
+                  left: -9999,
+                  top: 0,
+                  width: '100%',
+                }}
+              >
+                <div className="reader__chapter-no">{chapterHeadingLabel(chapter)}</div>
+                <h2 className="reader__chapter-title">{chapter.title}</h2>
+              </div>
+            )}
+
             {currentPage?.start === 0 && chapter?.detected && (
               <div className="reader__chapter-no">{chapterHeadingLabel(chapter)}</div>
             )}
@@ -701,7 +783,7 @@ export function ReaderScreen({ book, chapters, onClose, onOpenSearch, onOpenNote
           {/* 地脚：页码居中。真书的页码只是一个数字，不带章节名、不带百分比 ——
               进度感交给贴版心外缘的那条细线，它不占用版心。 */}
           {!isScrollMode && (
-            <div className="reader__folio">
+            <div className="reader__folio" ref={folioRef}>
               <span className="reader__folio-number">{pageIndex + 1}</span>
             </div>
           )}

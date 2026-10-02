@@ -369,8 +369,11 @@ export function BookshelfScreen(props: BookshelfScreenProps) {
             </button>
           ) : null}
 
-          {/* —— 工具栏：布局 / 排序 / 导入 —— */}
-          <div className="row row--between" style={{ marginTop: 18, gap: 10, flexWrap: 'wrap' }}>
+          {/* —— 工具栏：布局 / 排序 / 导入 ——
+              刻意**不加** flex-wrap：窄屏上换行会把工具栏撑成两行、把内容往下推，
+              观感就是「标签乱」。改用 360px 断点把按钮文字收成图标（见 styles.css），
+              一行永远放得下。 */}
+          <div className="row row--between shelf__toolbar">
             <div className="segmented" role="group" aria-label="书架布局">
               <button
                 type="button"
@@ -401,11 +404,11 @@ export function BookshelfScreen(props: BookshelfScreenProps) {
               title="搜索全部书籍的正文"
             >
               <IconSearch size={17} />
-              搜索
+              <span className="btn__label">搜索</span>
             </button>
             <button type="button" className="btn" onClick={onOpenImport} aria-label="导入本地书籍">
               <IconUpload size={17} />
-              导入
+              <span className="btn__label">导入</span>
             </button>
           </div>
 

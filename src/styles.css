@@ -37,6 +37,28 @@
   --danger: #a5453a;
   --success: #5c7a4a;
 
+  /* ============================================================
+     设备安全区（状态栏 / 刘海 / 底部手势条）
+     ------------------------------------------------------------
+     所有布局只读下面这两个语义变量，不直接碰 env()、也不做平台判断。
+     原因：Android WebView 里 `env(safe-area-inset-bottom)` **恒为 0**，
+     而底部手势条是真实存在的（约 16px）。直接读 env() 的结果就是
+     底部导航与页码被手势条压住 —— 用户看到的就是「字被遮住了」。
+
+     取值规则：--safe-* = max(实测值, override)
+       1. --safe-*-real  由 safeArea.ts 写入的**实测值**，
+          初值取 env(safe-area-*)（浏览器/iOS 原生支持时直接可用）
+       2. --safe-*-override  默认 0px，供测试与设计稿预览强制指定安全区。
+          用 max() 而不是「覆盖」语义：测试把 override 设成比实测值大，
+          就能稳定模拟「手势条更高的机型」，而不会被应用的 resize 重测冲掉。
+     ============================================================ */
+  --safe-top-real: env(safe-area-inset-top, 0px);
+  --safe-bottom-real: env(safe-area-inset-bottom, 0px);
+  --safe-top-override: 0px;
+  --safe-bottom-override: 0px;
+  --safe-top: max(var(--safe-top-real, 0px), var(--safe-top-override, 0px));
+  --safe-bottom: max(var(--safe-bottom-real, 0px), var(--safe-bottom-override, 0px));
+
   /* —— 排版 —— */
   --font-ui: "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, -apple-system, sans-serif;
   --font-serif: "Songti SC", "SimSun", "Source Han Serif SC", "Noto Serif CJK SC", Georgia, serif;
@@ -213,12 +235,14 @@ textarea:focus {
 }
 
 /* —— 顶部栏：不用重阴影，用细分隔线，保持纸感 —— */
+/* padding-top 让出状态栏/刘海；少了它标题会被状态栏压住。 */
 .topbar {
   display: flex;
   align-items: center;
   gap: 4px;
   padding: 6px 8px;
-  min-height: 52px;
+  padding-top: calc(6px + var(--safe-top, 0px));
+  min-height: calc(52px + var(--safe-top, 0px));
   background: var(--paper-surface);
   border-bottom: 1px solid var(--line);
   position: relative;
@@ -244,11 +268,12 @@ textarea:focus {
 }
 
 /* —— 底部导航：纸感底 + 细分隔线 —— */
+/* padding-bottom 让出底部手势条；少了它，四个标签会被手势条压住下半截。 */
 .tabbar {
   display: flex;
   background: var(--paper-surface);
   border-top: 1px solid var(--line);
-  padding-bottom: env(safe-area-inset-bottom, 0);
+  padding-bottom: var(--safe-bottom, 0px);
   z-index: 20;
 }
 
@@ -276,8 +301,12 @@ textarea:focus {
    书架
    ============================================================ */
 
+/**
+ * 书架是唯一没有顶栏的页面 —— 内容直接顶到屏幕最上面，
+ * 所以状态栏的安全区要它自己让出来。其余页面都有 .topbar，由顶栏负责让位。
+ */
 .shelf {
-  padding: 12px 14px 80px;
+  padding: calc(12px + var(--safe-top, 0px)) 14px calc(80px + var(--safe-bottom, 0px));
 }
 
 .shelf__hero {
@@ -598,7 +627,20 @@ textarea:focus {
 .reader__page {
   position: absolute;
   inset: 0;
-  padding: var(--reader-pad-y, 20px) var(--reader-pad-x, 22px);
+  /**
+   * 上下的留白必须「至少让开系统栏」。
+   *
+   * 原来只写 padding: var(--reader-pad-y) …（默认 19px），而状态栏要 47px、
+   * 手势条要 34px —— 于是正文第一行钻进状态栏、页码被手势条压住。
+   * 这里用 max() 取「用户设的页边距」与「安全区」的较大者：
+   * 页边距调大时仍然生效，而在系统栏更高的机型上也不会被遮住。
+   *
+   * 左右不需要处理：竖向手势条只占底部，横向没有系统栏。
+   */
+  padding-top: max(var(--reader-pad-y, 20px), var(--safe-top, 0px));
+  padding-bottom: max(var(--reader-pad-y, 20px), var(--safe-bottom, 0px));
+  padding-left: var(--reader-pad-x, 22px);
+  padding-right: var(--reader-pad-x, 22px);
   display: flex;
   flex-direction: column;
   will-change: transform;
@@ -844,13 +886,13 @@ textarea:focus {
 .reader__chrome--top {
   top: 0;
   border-bottom: 1px solid var(--line);
-  padding-top: env(safe-area-inset-top, 0);
+  padding-top: var(--safe-top, 0px);
 }
 
 .reader__chrome--bottom {
   bottom: 0;
   border-top: 1px solid var(--line);
-  padding-bottom: env(safe-area-inset-bottom, 0);
+  padding-bottom: var(--safe-bottom, 0px);
 }
 
 .reader__chrome--hidden.reader__chrome--top {
@@ -1361,6 +1403,11 @@ textarea:focus {
   font-size: 12px;
   min-height: 28px;
   border: 1px solid transparent;
+  /* 在 .chip-row 这类横向滚动容器里必须禁止压缩：
+     否则窄屏上 chip 会被挤成窄条、文字换行或被裁，看起来就是「排版乱」。
+     不收缩 + 容器横向滚动 = 永远单行且可滑动，这是窄屏唯一稳妥的做法。 */
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .chip--active {
@@ -1368,6 +1415,31 @@ textarea:focus {
   color: var(--accent-ink);
   border-color: var(--accent-soft);
   font-weight: 600;
+}
+
+/**
+ * 书架工具栏：布局切换 + 搜索 + 导入。
+ *
+ * 这一行曾经带 flex-wrap，窄屏上会折成两行 —— 既把内容往下推，
+ * 观感也乱。这里改成永不换行，并在窄屏（≤360px，覆盖 320/360 档）
+ * 把按钮文字收掉、只留图标，保证一行一定放得下。
+ * 图标按钮的可点区域有 44px 下限，不会因为去掉文字而变得难点。
+ */
+.shelf__toolbar {
+  margin-top: 18px;
+  gap: 10px;
+  flex-wrap: nowrap;
+}
+
+@media (max-width: 360px) {
+  .shelf__toolbar .btn__label {
+    display: none;
+  }
+
+  .shelf__toolbar .btn {
+    padding: 0 10px;
+    min-width: 44px;
+  }
 }
 
 .chip-row {
