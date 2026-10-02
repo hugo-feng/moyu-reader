@@ -25,8 +25,11 @@ pnpm preview        # 预览 dist（端口 4173）
 # 单元测试：引擎层（编码 / 分章 / 分页 / EPUB）
 node node_modules/vitest/vitest.mjs run
 
-# 端到端实测：真实 Edge + 手机尺寸视口（390×844），44 项断言
+# 端到端实测：真实 Edge + 手机尺寸视口（390×844），53 项断言
 node tests/e2e.mjs
+
+# 多尺寸布局审计：6 种屏宽（320/390/393/412/430/480）查重叠、裁切、溢出
+node tests/layout-audit.mjs
 
 # 界面截图：11 张关键界面，供人眼复核排版
 node tests/shots.mjs
@@ -39,12 +42,18 @@ node tests/probe-render.mjs
 Canvas 度量（分页）、Selection/Range API（选词）、ResizeObserver（视口监听），
 jsdom 对这些要么不实现要么不完整，用它测出来的「通过」没有意义。
 
+## 开发流程
+
+提交身份、分支模型、提交信息写法、合并前必须跑的验证、凭据管理 ——
+见 **[`DEVELOPMENT.md`](DEVELOPMENT.md)**。
+
 ## 当前状态
 
 | | |
 |---|---|
 | 单元测试 | **144 个全部通过** |
-| 端到端 | **44/44 通过**（真实 Edge，零控制台错误、零 404） |
+| 端到端 | **53/53 通过**（真实 Edge，零控制台错误、零 404） |
+| 布局审计 | **6 种屏宽 0 问题** |
 | 生产构建 | 主包 302 KB（gzip 99 KB）+ 按需加载的 epubjs 分块 342 KB + 样式 26 KB |
 
 ## 目录
