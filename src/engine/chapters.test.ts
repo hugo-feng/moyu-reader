@@ -273,4 +273,51 @@ describe('splitChapters — 低置信规则的条件启用', () => {
     // 只有 1 个高置信标题 → 会尝试低置信；关键是不能丢内容
     expect(reassemble(chapters)).toBe(text)
   })
+
+  // ------------------------------------------------------------------
+  // 过度切分：短篇里一行「像标题的正文」不应把整篇切成两节
+  //
+  // 这几条与 Android 端 ChapterSplitterTest 的同名用例**一一对应**，
+  // 两端行为必须一致 —— 否则验证器就失去了判断 Android 端是否正常的意义。
+  // ------------------------------------------------------------------
+
+  it('短篇里唯一一行像标题的正文不会被切成两节', () => {
+    const text = normalizeText(
+      [
+        '这是一个完整短篇的开头部分，写的是一个人从雪夜出发上路。',
+        '第二章的故事从这里开始讲起，他走进了一家很小的客栈坐在角落里。',
+        '后面还有很多内容，但这一行其实是正文，不是章节标题。',
+      ].join('\n'),
+    )
+    const chapters = splitChapters(text)
+
+    expect(chapters.length).toBe(1)
+    expect(chapters[0].content.length).toBe(text.length)
+    expect(chapters[0].detected).toBe(false)
+    expect(reassemble(chapters)).toBe(text)
+  })
+
+  it('带句末标点的单行也按正文处理', () => {
+    const text = normalizeText(
+      ['正文开头一段足够长让它不像标题行。', '第三章 他离开了这里。', '后面还有内容。'].join('\n'),
+    )
+    expect(splitChapters(text).length).toBe(1)
+  })
+
+  it('真正的单一短标题仍然会被识别', () => {
+    // 反向保护：判据改成「标题像不像」之后，
+    // 不能再把合法的短标题也拦掉 —— 那会让整本书只剩一章。
+    const text = normalizeText(['第一章 开端', '正文内容。'].join('\n'))
+    const chapters = splitChapters(text)
+    expect(chapters.length).toBe(1)
+    expect(chapters[0].detected).toBe(true)
+    expect(chapters[0].title).toContain('开端')
+  })
+
+  it('两个以上标题时不做像正文的拦截', () => {
+    const text = normalizeText(['第一章 甲', '正文。', '第二章 乙', '正文。'].join('\n'))
+    const chapters = splitChapters(text)
+    expect(chapters.length).toBe(2)
+    expect(reassemble(chapters)).toBe(text)
+  })
 })

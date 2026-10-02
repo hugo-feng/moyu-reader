@@ -85,6 +85,33 @@ const RE_BARE_NUMBER = /^[\s\u3000]*([0-9]{1,4})[\s\u3000]*$/
 /** 标题行最大长度：超过则视为正文中的普通句子，不切。 */
 const MAX_TITLE_LINE_LENGTH = 40
 
+/**
+ * 标题最长多少字之后就不像标题、而像正文了。
+ *
+ * 与 [MAX_TITLE_LINE_LENGTH] 是两个不同用途的阈值，别混淆：
+ *   - MAX_TITLE_LINE_LENGTH（40）：**扫描时**过滤，太长的行根本不作为候选
+ *   - 本常量（24）：**已识别为候选之后**再判断它像不像标题，
+ *     用于拦住「短篇里唯一一行像标题的正文」
+ * 后者更严，因为要补偿「整篇只剩一个候选」时的低容错。
+ */
+const MAX_PLAUSIBLE_TITLE_LENGTH = 24
+
+/** 句末标点：出现它们说明这是正文句子，不是标题。 */
+const PROSE_ENDINGS = /[。！？；…]$|[，、]$/
+
+/**
+ * 判断一行「读起来像不像正文」而不是标题。
+ *
+ * 与 Android 端 ChapterSplitter.looksLikeProse 必须一致。
+ * 判据是长度与句末标点，**与全文长短无关**：按全文长度判断会误伤
+ * 合法的短文本（测试固件就是短文本，实测踩过）。
+ */
+function looksLikeProse(title: string): boolean {
+  const t = title.trim()
+  if (t.length > MAX_PLAUSIBLE_TITLE_LENGTH) return true
+  return PROSE_ENDINGS.test(t)
+}
+
 export interface SplitOptions {
   /** 是否启用低置信规则（默认在无高置信结果时自动启用） */
   allowLowConfidence?: boolean
@@ -271,6 +298,34 @@ export function splitChapters(text: string, options: SplitOptions = {}): Chapter
   // 仍然没有章节特征 → 按段落兜底切块
   if (candidates.length === 0) {
     return chunkByParagraph(text, chunkSize)
+  }
+
+  /**
+   * 值不值得切 —— 只在「只有一个候选标题，且那个标题不像标题」时拦。
+   *
+   * 与 Android 端 ChapterSplitter.split 的同名判断**必须保持一致**：
+   * 分章结果是用户可见的核心行为，两端不一致会让人无法用验证器
+   * 去判断 Android 端是否正常。
+   *
+   * 防的是：短篇小说里出现一行像章节标题的**正文句子**，
+   * 于是全文被切成两节，第一节只有开头一小段。
+   *
+   * 判据按「那一行像不像标题」（长度 + 句末标点），
+   * **不能**按全文长度 —— 后者会把合法的短文本一并拦掉
+   * （测试固件本身就是短文本，实测踩过这个坑）。
+   */
+  if (candidates.length === 1 && looksLikeProse(candidates[0].title)) {
+    return [
+      {
+        bookId: '',
+        index: 0,
+        title: '全文',
+        content: text,
+        start: 0,
+        length: text.length,
+        detected: false,
+      },
+    ]
   }
 
   // 丢弃首个候选前的空白，但保留其作为「前言」章节
